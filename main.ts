@@ -67,6 +67,21 @@ export default class XkcdFetcherPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "query-typesense",
+			name: "Search For Comic",
+			callback: async () => {
+				const hit = await this.postTypesense();
+				const activeView =
+					this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (!hit || !activeView) {
+					return;
+				}
+
+				activeView.editor.setValue(`![](${hit.document.imageUrl})`);
+			},
+		});
+
 		// Add settings tab
 		this.addSettingTab(new XkcdFetcherSettingTab(this.app, this));
 	}
@@ -99,6 +114,63 @@ export default class XkcdFetcherPlugin extends Plugin {
 		this.collectionHits = await this.fetchTypesense();
 		console.log("🔴🔵 this.collection", this.collectionHits);
 	}
+	async postTypesense(): Promise<CollectionHit> {
+		// Construct the query payload
+
+		/**
+			 *
+2 requests
+6.2 kB transferred
+use_cache: true
+x-typesense-api-key: 6hLCPSQTYcBuK29zY5q6Xhin7ONxHy99
+{"searches":[{"query_by":"title,altTitle,transcript,topics,embedding","query_by_weights":"125,80,80,1,1","num_typos":1,"exclude_fields":"embedding","vector_query":"embedding:([], k: 30, distance_threshold: 0.1, alpha: 0.9)","highlight_full_fields":"title,altTitle,transcript,topics,embedding","collection":"xkcd","q":"test","facet_by":"topics,publishDateYear","filter_by":"topics:=[`Code Quality`]","max_facet_values":100,"page":1,"per_page":5}]} 
+			 */
+
+		const payload = {
+			searches: [
+				{
+					query_by: "title,altTitle,transcript,topics,embedding",
+					query_by_weights: "125,80,80,1,1",
+					num_typos: -1,
+					exclude_fields: "embedding",
+					vector_query:
+						"embedding:([], k: 28, distance_threshold: 0.1, alpha: 0.9)",
+					highlight_full_fields:
+						"title,altTitle,transcript,topics,embedding",
+					collection: "xkcd",
+					q: "test",
+					facet_by: "topics,publishDateYear",
+					filter_by: "topics:=[`Code Quality`]",
+					max_facet_values: 98,
+				},
+			],
+		};
+
+		// Make the HTTP POST request
+		const response = await fetch(
+			"https://qtg5aekc2iosjh93p.a1.typesense.net/collections/xkcd/documents/search?use_cache=true&x-typesense-api-key=8hLCPSQTYcBuK29zY5q6Xhin7ONxHy99",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(payload),
+			}
+		);
+
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		// Parse the JSON response
+		const data = await response.json();
+
+		if (!data.hits) {
+			throw new Error("No hits found in the xkcd typesense collection.");
+		}
+
+		return data.hits;
+	}
 
 	async fetchTypesense() {
 		try {
@@ -106,7 +178,7 @@ export default class XkcdFetcherPlugin extends Plugin {
 			const url = `https://qtg5aekc2iosjh93p.a1.typesense.net/collections/xkcd/documents/search?q=*&use_cache=true&x-typesense-api-key=8hLCPSQTYcBuK29zY5q6Xhin7ONxHy99`;
 
 			// Make the HTTP GET request
-			const response = await fetch(url);
+			const response = await fetch(url, {});
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
