@@ -1,4 +1,11 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
+import {
+	App,
+	MarkdownView,
+	Notice,
+	Plugin,
+	PluginSettingTab,
+	Setting,
+} from "obsidian";
 
 type CollectionHit = {
 	document: {
@@ -15,28 +22,6 @@ type CollectionHit = {
 		transcript: string;
 	};
 };
-// {
-// 		"document": {
-// 				"altTitle": "This only makes it more urgent that we adopt my roadmap for the next 10 years, which should put us solidly in the lead.",
-// 				"embedding": [0.232, 0.123, 0.345, 0.456, 0.567, 0.678, 0.789, 0.890, 0.901, 0.012],
-// 				"id": "2968",
-// 				"imageUrl": "https://imgs.xkcd.com/comics/university_age.png",
-// 				"publishDateDay": 5,
-// 				"publishDateMonth": 8,
-// 				"publishDateTimestamp": 1722816000,
-// 				"publishDateYear": 2024,
-// 				"title": "University Age",
-// 				"topics": [
-// 						"Incomplete explanations",
-// 						"Cueball",
-// 						"Public speaking",
-// 						"Time"
-// 				],
-// 				"transcript": "When I took the helm five years ago, our university was 213 years old – the second oldest in the state, just behind our 215 year old rival. Under my leadership, we've funded an intensive program to increase our age to 218, overtaking our rival by 3. Unfortunately, I have terrible news. "
-// 		},
-// 		"highlight": {},
-// 		"highlights": []
-// },
 
 type CollectionHits = CollectionHit[];
 
@@ -51,6 +36,7 @@ const DEFAULT_SETTINGS: XkcdFetcherSettings = {
 export default class XkcdFetcherPlugin extends Plugin {
 	settings: XkcdFetcherSettings;
 	collectionHits: CollectionHits;
+	view: MarkdownView | null;
 
 	async onload() {
 		console.log("Loading XkcdFetcherPlugin");
@@ -61,11 +47,24 @@ export default class XkcdFetcherPlugin extends Plugin {
 		// set up the collection
 		await this.setCollection();
 
+		await this.setView(
+			this.app.workspace.getActiveViewOfType(MarkdownView)
+		);
+
 		// Add a command to fetch the first xkcd comic
 		this.addCommand({
 			id: "fetch-first-xkcd",
 			name: "Fetch First xkcd Comic",
-			callback: () => this.fetchFirstComic(),
+			callback: async () => {
+				const hit = await this.fetchFirstComic();
+				const activeView =
+					this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (!hit || !activeView) {
+					return;
+				}
+
+				activeView.editor.setValue(`![](${hit.document.imageUrl})`);
+			},
 		});
 
 		// Add settings tab
@@ -76,6 +75,9 @@ export default class XkcdFetcherPlugin extends Plugin {
 		console.log("Unloading XkcdFetcherPlugin");
 	}
 
+	async setView(view: MarkdownView | null) {
+		this.view = view;
+	}
 	async loadSettings() {
 		this.settings = Object.assign(
 			{},
@@ -90,7 +92,7 @@ export default class XkcdFetcherPlugin extends Plugin {
 
 	async fetchFirstComic() {
 		// this.parseCollectionForHit(0);
-		this.searchCollectionByTitle("Matter");
+		return this.searchCollectionByTitle("Making Tea");
 	}
 
 	async setCollection() {
@@ -129,7 +131,7 @@ export default class XkcdFetcherPlugin extends Plugin {
 		console.log("🔴🔵 index", index);
 		console.log("🍪🔴🟡 collection[index]", this.collectionHits[index]);
 	}
-	searchCollectionByTitle(title: string) {
+	searchCollectionByTitle(title: string): CollectionHit | undefined {
 		console.log("🔴🔵 title", title);
 
 		const hit = this.collectionHits.find((hit) =>
@@ -137,6 +139,8 @@ export default class XkcdFetcherPlugin extends Plugin {
 		);
 
 		console.log("🔴🔵 hit", hit);
+
+		return hit;
 	}
 }
 
